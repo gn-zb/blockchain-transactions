@@ -23,7 +23,7 @@ public class Main {
     }
 }
 
-// Play around with these APIs
+
 
 // Get wallet transactions: play around params - limit - from_date, to_date
 // Get Token balances: https://docs.moralis.com/web3-data-api/evm/reference/wallet-api/get-wallet-token-balances-price?address=0xcB1C1FdE09f811B294172696404e88E658659905&chain=eth&token_addresses=[]
