@@ -28,7 +28,11 @@ public class MoralisAPI {
 
             // Add query parameters
             builder.setParameter("chain", "eth");
-            builder.setParameter("limit", "3");
+            builder.setParameter("limit", "10");
+            builder.setParameter("include_internal_transactions", "true");
+            builder.setParameter("from_date", "2024-12-01");
+            builder.setParameter("to_date", "2024-12-31");
+            builder.setParameter("order", "DESC");
 
             // Build the URI with parameters
             URI uri = builder.build();
