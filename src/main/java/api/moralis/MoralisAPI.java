@@ -1,5 +1,12 @@
 package api.moralis;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+
+import dto.TransactionDTO;
+
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -16,73 +23,123 @@ import java.util.ArrayList;
 public class MoralisAPI {
     private final String BASE_URL = "https://deep-index.moralis.io/api/v2.2";
     private String apiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6IjgyOWI3Y2U3LWYzMWUtNGJlNC1hM2Q3LWY4NDFkOGRkNzNhNiIsIm9yZ0lkIjoiNDQ1NjczIiwidXNlcklkIjoiNDU4NTQyIiwidHlwZUlkIjoiOTdjZThiZmEtYjExNC00YThkLTg4M2EtNTc2OTcyYmRhZWM3IiwidHlwZSI6IlBST0pFQ1QiLCJpYXQiOjE3NDY1OTQ4MjcsImV4cCI6NDkwMjM1NDgyN30.O_dNXACH90ubiU7sPxBkJTaRP0_kh1mGiInhmPqeEMU \n";
-    private String walletAddress = "0x4838B106FCe9647Bdf1E7877BF73cE8B0BAD5f97";
+    private Gson gson;
 
-    public void getWalletHistory() {
-        // Create an instance of HttpClient
+    public MoralisAPI() {
+        this.gson = new Gson(); // gson ( having new data after run getWalletHistory)
+    }
+
+    // Method signature - takes wallet address and network, returns list of transaction objects
+    public ArrayList<TransactionDTO> getWalletHistory(String address, String network) {
+        // Create an instance of HttpClient for making requests
         CloseableHttpClient httpClient = HttpClients.createDefault();
-        try {
-            String endpoint = BASE_URL + "/wallets/" + walletAddress + "/history";
+        // Empty list to store results
+        ArrayList<TransactionDTO> transactions = new ArrayList<>();
 
-            // Create URI with query parameters using URIBuilder
+        try {
+            // BUILD THE API REQUEST
+            // Construct the complete API URL by combining base URL with specific endpoint
+            String endpoint = BASE_URL + "/wallets/" + address + "/history";
+
+            // Create URI builder to add query parameters to URL
             URIBuilder builder = new URIBuilder(endpoint);
 
-            // Add query parameters
+            // Add query parameters to the request
+            builder.setParameter("address", address);
             builder.setParameter("chain", "eth");
             builder.setParameter("limit", "10");
-            builder.setParameter("include_internal_transactions", "true"); //HW
-            builder.setParameter("from_date", "2024-12-01");               //HW
-            builder.setParameter("to_date", "2024-12-31");                 //HW
+            builder.setParameter("include_internal_transactions", "true");
+            builder.setParameter("from_date", "2024-12-01");
+            builder.setParameter("to_date", "2024-12-31");
             builder.setParameter("order", "DESC");
 
-            // Build the URI with parameters
+            // Build the final URI with parameters
             URI uri = builder.build();
+            // Print for debugging
             System.out.println("Making request to: " + uri.toString());
 
-            // Create HttpGet request with the URI
+            // MAKE THE HTTP REQUEST
+            // Create HttpGet request object with the constructed URI
             HttpGet request = new HttpGet(uri);
 
+            // Add required headers: Authentication key and telling the server that we want JSON response
             request.addHeader("X-API-Key", apiKey);
             request.addHeader("Accept", "application/json");
 
-            // Execute the request and get the response
+            // Send the request and get the response
             CloseableHttpResponse response = httpClient.execute(request);
 
-            try {
-                int statusCode = response.getStatusLine().getStatusCode();
-                System.out.println("Response Status Code: " + statusCode);
+            // PROCESS THE RESPONSE
+            // Get HTTP status code
+            int statusCode = response.getStatusLine().getStatusCode();
+            //Print debug info
+            System.out.println("Getting wallet history for: " + address + " on " + network);
+            System.out.println("Response Status Code: " + statusCode);
 
-                HttpEntity entity = response.getEntity();
-                if (entity != null) {
-                    String result = EntityUtils.toString(entity);
-                    System.out.println("Response Body: " + result);
-                } else {
-                    System.out.println("No response body");
+            // Extracts the response body
+            HttpEntity entity = response.getEntity();
+            if (entity != null) {
+                // convert response body to a string
+                String result = EntityUtils.toString(entity);
+                // print the response body
+                System.out.println("Response Body: " + result);
+
+                // Convert JSON string into Java JsonObject
+                JsonObject jsonResponse = gson.fromJson(result, JsonObject.class);
+
+
+                // Checks if response has "result" field, then gets the array of transactions
+                if (jsonResponse.has("result")) {
+                    JsonArray resultArray = jsonResponse.getAsJsonArray("result");
+
+                    // Loops through each transaction in the array
+                    for (JsonElement element : resultArray) {
+                        JsonObject transaction = element.getAsJsonObject();
+
+                        // Extract specific fields from each transaction from JSON and create TransactionDTO
+                        String hash = transaction.get("hash").getAsString();
+                        String fromAddress = transaction.get("from_address").getAsString();
+                        String value = transaction.get("value").getAsString();
+                        String blockTimestamp = transaction.get("block_timestamp").getAsString();
+
+                        // Convert value from Wei to double
+                        Double amount = Double.parseDouble(value);
+
+                        // Creates a TransactionDTO object with the extracted data and adds it to the list
+                        TransactionDTO transactionDTO = new TransactionDTO(hash, fromAddress, amount, blockTimestamp);
+                        transactions.add(transactionDTO);
+                    }
+
+                    System.out.println("Parsed " + transactions.size() + " transactions");
+
+                    // Print parsed transactions
+                    for (TransactionDTO singleTransaction : transactions) {
+                        System.out.println("Transaction: " + singleTransaction.getTransactionId() +
+                                " | Amount: " + singleTransaction.getAmount() +
+                                " | From: " + singleTransaction.getAddress());
+                    }
                 }
 
-            } finally {
-                response.close();
+                // Returns the list of TransactionDTO objects
+                return transactions;
+            } else {
+                System.out.println("No response body");
+                return transactions;
             }
         } catch (IOException e) {
             System.err.println("IO Error: " + e.getMessage());
             e.printStackTrace();
+            return transactions;
         } catch (URISyntaxException e) {
             System.err.println("URI Syntax Error: " + e.getMessage());
             throw new RuntimeException(e);
-        } finally {
-            try {
-                httpClient.close();
-            } catch (IOException e) {
-                System.err.println("Error closing HttpClient: " + e.getMessage());
-                e.printStackTrace();
-            }
         }
     }
 
-    public void getTokenBalances() {
+    public void getTokenBalances(String address) {
         CloseableHttpClient httpClient = HttpClients.createDefault();
         try {
-            String endpoint = BASE_URL + "/wallets/" + walletAddress + "/tokens";
+            String endpoint = BASE_URL + "/wallets/" + address + "/tokens";
 
             URIBuilder builder = new URIBuilder(endpoint);
             builder.setParameter("chain", "eth");
@@ -95,7 +152,7 @@ public class MoralisAPI {
             retrievedTokens.add("0x514910771AF9Ca656af840dff83E8264EcF986CA"); // LINK token contract
             retrievedTokens.add("0x0F5D2fB29fb7d3CFeE444a200298f468908cC942"); // MANA token contract
 
-            for (int i = 0; i < retrievedTokens.size(); i++){
+            for (int i = 0; i < retrievedTokens.size(); i++) {
                 builder.setParameter("token_addresses[" + i + "]", retrievedTokens.get(i));
             }
 
